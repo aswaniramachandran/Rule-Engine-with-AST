@@ -1,0 +1,153 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rule Engine</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Rule Engine</h1>
+
+        <!-- Create Rule Section -->
+        <h2>Create Rule</h2>
+        <textarea id="ruleInput" rows="4" cols="50" placeholder="Enter rule here..."></textarea>
+        <button onclick="createRule()">Create Rule</button>
+        <pre id="ruleOutput"></pre>
+
+        <!-- Combine Rules Section -->
+        <h2>Combine Rules</h2>
+        <textarea id="combineInput" rows="4" cols="50" placeholder="Enter multiple rules separated by newline..."></textarea>
+        <button onclick="combineRules()">Combine Rules</button>
+        <pre id="combineOutput"></pre>
+
+        <!-- Evaluate Rule Section -->
+        <h2>Evaluate Rule</h2>
+        <textarea id="dataInput" rows="4" cols="50" placeholder='{"age": 35, "department": "Sales", "salary": 60000}'></textarea>
+        <button onclick="evaluateRule()">Evaluate Rule</button>
+        <pre id="evaluateOutput"></pre>
+    </div>
+
+    <script>
+        // Function to sanitize input
+        function sanitizeRuleInput(rule) {
+            return rule.replace(/\n/g, ' ').replace(/'/g, '"');
+        }
+
+        // Function to create a rule and display the AST
+        async function createRule() {
+            const rule = document.getElementById("ruleInput").value;
+
+            if (!rule) {
+                document.getElementById("ruleOutput").innerText = 'Error: Rule input is empty.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/create_rule', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ rule_string: rule }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Server responded with error: ${errorData.error}`);
+                }
+
+                const data = await response.json();
+                document.getElementById("ruleOutput").innerText = JSON.stringify(data.ast, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById("ruleOutput").innerText = 'Error creating rule: ' + error.message;
+            }
+        }
+
+        // Function to combine multiple rules
+        async function combineRules() {
+            const rules = document.getElementById("combineInput").value.split('\n')
+                .filter(Boolean)
+                .map(rule => sanitizeRuleInput(rule)); 
+
+            if (rules.length === 0) {
+                document.getElementById("combineOutput").innerText = 'Error: No rules provided for combining.';
+                return;
+            }
+
+            console.log("Rules to send:", { rules }); 
+
+            try {
+                const response = await fetch('/api/combine_rules', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ rules }), 
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.text(); 
+                    console.error('Error response from server:', errorData); 
+                    throw new Error(`Server responded with error: ${response.status} - ${errorData}`);
+                }
+
+                const data = await response.json();
+                document.getElementById("combineOutput").innerText = JSON.stringify(data.combined_ast, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById("combineOutput").innerText = 'Error combining rules: ' + error.message;
+            }
+        }
+
+        // Function to evaluate the rule with provided data and display the result
+        async function evaluateRule() {
+            const ast = document.getElementById("ruleOutput").innerText.trim();  
+            const dataInput = document.getElementById("dataInput").value.trim(); 
+
+            if (!ast || !dataInput) {
+                document.getElementById("evaluateOutput").innerText = 'Error: AST or data missing for evaluation.';
+                return;
+            }
+
+            try {
+                // Sanitize the AST and parse it
+                const parsedAst = JSON.parse(sanitizeRuleInput(ast));
+
+                // Parse the data input
+                const data = JSON.parse(dataInput);
+
+                // Send the AST and data for evaluation to the server
+                const response = await fetch('/api/evaluate_rule', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ ast: parsedAst, data }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Server responded with error: ${errorData.error}`);
+                }
+
+                const result = await response.json();
+                document.getElementById("evaluateOutput").innerText = JSON.stringify(result, null, 2);
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById("evaluateOutput").innerText = 'Error evaluating rule: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
